@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import {
@@ -13,264 +13,181 @@ import { Input } from "./ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Badge } from "./ui/badge";
 import { MessageSquare, Send, User } from "lucide-react";
-
-interface ChatMessage {
-  id: string;
-  sender: "client" | "technician";
-  message: string;
-  timestamp: Date;
-  read: boolean;
-}
-
-interface Chat {
-  id: string;
-  clientName: string;
-  clientId: string;
-  subject: string;
-  status: "active" | "waiting" | "closed";
-  lastActivity: Date;
-  messages: ChatMessage[];
-  unreadCount: number;
-}
-
-interface Client {
-  id: string;
-  name: string;
-  company: string;
-  email: string;
-  avatar?: string;
-}
+import { useAuth } from "../contexts/AuthContext";
+import { supabase } from "../lib/supabase";
+import {
+  getChats,
+  getMessages,
+  sendMessage,
+  Chat,
+  Message,
+  getClients,
+  Client,
+} from "../lib/api";
+import UserManagement from "./UserManagement";
 
 interface TechnicianDashboardProps {
-  initialChats?: Chat[];
-  initialClients?: Client[];
   currentTechnician?: string;
 }
 
-const TechnicianDashboard: React.FC<TechnicianDashboardProps> = ({
-  initialChats = [
-    {
-      id: "chat1",
-      clientName: "John Smith",
-      clientId: "client1",
-      subject: "Email Configuration Issue",
-      status: "active",
-      lastActivity: new Date(Date.now() - 15 * 60000),
-      unreadCount: 2,
-      messages: [
-        {
-          id: "msg1",
-          sender: "client",
-          message: "I can't access my company email on my new laptop.",
-          timestamp: new Date(Date.now() - 60 * 60000),
-          read: true,
-        },
-        {
-          id: "msg2",
-          sender: "technician",
-          message: "Have you tried resetting your password?",
-          timestamp: new Date(Date.now() - 45 * 60000),
-          read: true,
-        },
-        {
-          id: "msg3",
-          sender: "client",
-          message: "Yes, but I'm still getting an authentication error.",
-          timestamp: new Date(Date.now() - 30 * 60000),
-          read: true,
-        },
-        {
-          id: "msg4",
-          sender: "client",
-          message: "The error code is AUTH-5523 if that helps.",
-          timestamp: new Date(Date.now() - 15 * 60000),
-          read: false,
-        },
-      ],
-    },
-    {
-      id: "chat2",
-      clientName: "Sarah Johnson",
-      clientId: "client2",
-      subject: "VPN Connection Problem",
-      status: "waiting",
-      lastActivity: new Date(Date.now() - 2 * 60000),
-      unreadCount: 1,
-      messages: [
-        {
-          id: "msg5",
-          sender: "client",
-          message: "I'm unable to connect to the company VPN from home.",
-          timestamp: new Date(Date.now() - 10 * 60000),
-          read: true,
-        },
-        {
-          id: "msg6",
-          sender: "technician",
-          message: "What error message are you seeing?",
-          timestamp: new Date(Date.now() - 5 * 60000),
-          read: true,
-        },
-        {
-          id: "msg7",
-          sender: "client",
-          message: "It says 'Connection timed out' after about 30 seconds.",
-          timestamp: new Date(Date.now() - 2 * 60000),
-          read: false,
-        },
-      ],
-    },
-    {
-      id: "chat3",
-      clientName: "Michael Brown",
-      clientId: "client3",
-      subject: "Printer Not Working",
-      status: "active",
-      lastActivity: new Date(Date.now() - 120 * 60000),
-      unreadCount: 0,
-      messages: [
-        {
-          id: "msg8",
-          sender: "client",
-          message: "The office printer isn't responding to print jobs.",
-          timestamp: new Date(Date.now() - 180 * 60000),
-          read: true,
-        },
-        {
-          id: "msg9",
-          sender: "technician",
-          message:
-            "Have you checked if it's turned on and connected to the network?",
-          timestamp: new Date(Date.now() - 150 * 60000),
-          read: true,
-        },
-        {
-          id: "msg10",
-          sender: "client",
-          message: "Yes, it's on and the network light is green.",
-          timestamp: new Date(Date.now() - 120 * 60000),
-          read: true,
-        },
-      ],
-    },
-  ],
-  initialClients = [
-    {
-      id: "client1",
-      name: "John Smith",
-      company: "Acme Corp",
-      email: "john.smith@acmecorp.com",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=john",
-    },
-    {
-      id: "client2",
-      name: "Sarah Johnson",
-      company: "TechStart Inc",
-      email: "sarah.j@techstart.io",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=sarah",
-    },
-    {
-      id: "client3",
-      name: "Michael Brown",
-      company: "Global Solutions",
-      email: "m.brown@globalsolutions.com",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=michael",
-    },
-    {
-      id: "client4",
-      name: "Emily Davis",
-      company: "Innovate LLC",
-      email: "emily.d@innovatellc.net",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=emily",
-    },
-    {
-      id: "client5",
-      name: "Robert Wilson",
-      company: "DataSphere",
-      email: "r.wilson@datasphere.org",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=robert",
-    },
-  ],
-  currentTechnician = "Alex Technician",
-}) => {
-  const [chats, setChats] = useState<Chat[]>(initialChats);
-  const [clients, setClients] = useState<Client[]>(initialClients);
+const TechnicianDashboard: React.FC<TechnicianDashboardProps> = () => {
+  const { user, profile } = useAuth();
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const [activeChat, setActiveChat] = useState<Chat | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [selectedClient, setSelectedClient] = useState<string>("");
   const [chatFilter, setChatFilter] = useState<
     "all" | "active" | "waiting" | "closed"
   >("all");
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("chats");
 
-  // Handle selecting a chat
-  const handleSelectChat = (chat: Chat) => {
-    // Mark all messages as read
-    const updatedChat = {
-      ...chat,
-      unreadCount: 0,
-      messages: chat.messages.map((msg) => ({ ...msg, read: true })),
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        if (!user) return;
+
+        // Get technician ID if the user is a technician
+        if (profile?.role === "technician") {
+          const { data: techData } = await supabase
+            .from("technicians")
+            .select("id")
+            .eq("user_id", user.id)
+            .single();
+
+          if (techData) {
+            // Load chats for this technician
+            const chatsData = await getChats(techData.id);
+            setChats(chatsData);
+          }
+        } else {
+          // For admins, load all chats
+          const chatsData = await getChats();
+          setChats(chatsData);
+        }
+
+        // Load clients for the client switcher
+        const clientsData = await getClients();
+        setClients(clientsData);
+      } catch (err) {
+        console.error("Error loading dashboard data:", err);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    setActiveChat(updatedChat);
+    loadData();
+  }, [user, profile]);
 
-    // Update the chat in the chats array
-    setChats((prevChats) =>
-      prevChats.map((c) => (c.id === chat.id ? updatedChat : c)),
-    );
+  // Handle selecting a chat
+  const handleSelectChat = async (chat: Chat) => {
+    setActiveChat(chat);
+
+    try {
+      // Load messages for this chat
+      const messagesData = await getMessages(chat.id);
+      setMessages(messagesData);
+
+      // Mark messages as read
+      if (user) {
+        await supabase
+          .from("messages")
+          .update({ read: true })
+          .eq("chat_id", chat.id)
+          .neq("sender_id", user.id)
+          .eq("read", false);
+      }
+    } catch (err) {
+      console.error("Error loading messages:", err);
+    }
   };
 
   // Handle sending a new message
-  const handleSendMessage = () => {
-    if (!activeChat || !newMessage.trim()) return;
+  const handleSendMessage = async () => {
+    if (!activeChat || !user || !newMessage.trim()) return;
 
-    const newMsg: ChatMessage = {
-      id: `msg${Date.now()}`,
-      sender: "technician",
-      message: newMessage,
-      timestamp: new Date(),
-      read: true,
-    };
+    try {
+      // Send the message
+      await sendMessage(activeChat.id, user.id, newMessage);
 
-    const updatedChat = {
-      ...activeChat,
-      messages: [...activeChat.messages, newMsg],
-      lastActivity: new Date(),
-    };
+      // Refresh messages
+      const messagesData = await getMessages(activeChat.id);
+      setMessages(messagesData);
 
-    setActiveChat(updatedChat);
-    setChats((prevChats) =>
-      prevChats.map((c) => (c.id === activeChat.id ? updatedChat : c)),
-    );
-    setNewMessage("");
+      // Clear input
+      setNewMessage("");
+    } catch (err) {
+      console.error("Error sending message:", err);
+    }
   };
 
   // Handle client switch
-  const handleClientSwitch = (clientId: string) => {
+  const handleClientSwitch = async (clientId: string) => {
     setSelectedClient(clientId);
 
-    // Find if there's an existing chat with this client
-    const existingChat = chats.find((chat) => chat.clientId === clientId);
+    try {
+      // Find if there's an existing chat with this client
+      const { data: existingChats } = await supabase
+        .from("chats")
+        .select("*, ticket:tickets!inner(client_id)")
+        .eq("ticket.client_id", clientId)
+        .order("last_activity", { ascending: false });
 
-    if (existingChat) {
-      handleSelectChat(existingChat);
-    } else {
-      // If no existing chat, create a new one
-      const client = clients.find((c) => c.id === clientId);
-      if (client) {
-        const newChat: Chat = {
-          id: `chat${Date.now()}`,
-          clientName: client.name,
-          clientId: client.id,
-          subject: "New Conversation",
-          status: "active",
-          lastActivity: new Date(),
-          unreadCount: 0,
-          messages: [],
-        };
+      if (existingChats && existingChats.length > 0) {
+        // Get the full chat data
+        const chatData = await getChats();
+        const fullChat = chatData.find((c) => c.id === existingChats[0].id);
+        if (fullChat) {
+          handleSelectChat(fullChat);
+        }
+      } else {
+        // If no existing chat, create a new ticket and chat
+        const client = clients.find((c) => c.id === clientId);
+        if (client && user) {
+          // Create a new ticket
+          const { data: ticketData } = await supabase
+            .from("tickets")
+            .insert({
+              client_id: clientId,
+              technician_id: null, // Will be assigned later
+              title: "New Support Request",
+              description: "Support request initiated by technician",
+              type: "support",
+              status: "pending",
+              priority: "medium",
+            })
+            .select()
+            .single();
 
-        setChats((prevChats) => [...prevChats, newChat]);
-        setActiveChat(newChat);
+          if (ticketData) {
+            // Create a new chat
+            const { data: chatData } = await supabase
+              .from("chats")
+              .insert({
+                ticket_id: ticketData.id,
+                subject: "New Support Request",
+                status: "active",
+                last_activity: new Date().toISOString(),
+              })
+              .select()
+              .single();
+
+            if (chatData) {
+              // Get the full chat data
+              const fullChatsData = await getChats();
+              const newChat = fullChatsData.find((c) => c.id === chatData.id);
+              if (newChat) {
+                handleSelectChat(newChat);
+              }
+            }
+          }
+        }
       }
+    } catch (err) {
+      console.error("Error switching client:", err);
     }
   };
 
@@ -280,6 +197,14 @@ const TechnicianDashboard: React.FC<TechnicianDashboardProps> = ({
     return chat.status === chatFilter;
   });
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-80px)]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-[calc(100vh-80px)] bg-gray-100">
       {/* Sidebar with chat list */}
@@ -287,79 +212,122 @@ const TechnicianDashboard: React.FC<TechnicianDashboardProps> = ({
         <div className="p-4 border-b border-gray-200">
           <h2 className="text-lg font-semibold">Technician Dashboard</h2>
           <p className="text-sm text-gray-500">
-            Logged in as {currentTechnician}
+            Logged in as {profile?.fullName || "Technician"}
           </p>
         </div>
 
         <div className="p-4 border-b border-gray-200">
-          <Select
-            value={chatFilter}
-            onValueChange={(value) => setChatFilter(value as any)}
+          <Tabs
+            defaultValue="chats"
+            onValueChange={setActiveTab}
+            value={activeTab}
           >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Filter chats" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Chats</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="waiting">Waiting</SelectItem>
-              <SelectItem value="closed">Closed</SelectItem>
-            </SelectContent>
-          </Select>
+            <TabsList className="w-full">
+              <TabsTrigger value="chats" className="flex-1">
+                Chats
+              </TabsTrigger>
+              <TabsTrigger value="users" className="flex-1">
+                Users
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
 
-        <div className="overflow-y-auto flex-1">
-          {filteredChats.length > 0 ? (
-            filteredChats.map((chat) => (
-              <div
-                key={chat.id}
-                className={`p-4 border-b border-gray-200 cursor-pointer hover:bg-gray-50 ${activeChat?.id === chat.id ? "bg-blue-50" : ""}`}
-                onClick={() => handleSelectChat(chat)}
+        {activeTab === "chats" && (
+          <>
+            <div className="p-4 border-b border-gray-200">
+              <Select
+                value={chatFilter}
+                onValueChange={(value) => setChatFilter(value as any)}
               >
-                <div className="flex justify-between items-start mb-1">
-                  <div className="font-medium">{chat.clientName}</div>
-                  <div className="text-xs text-gray-500">
-                    {new Date(chat.lastActivity).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </div>
-                </div>
-                <div className="text-sm text-gray-600 truncate mb-1">
-                  {chat.subject}
-                </div>
-                <div className="flex justify-between items-center">
-                  <Badge
-                    variant="outline"
-                    className={`${
-                      chat.status === "active"
-                        ? "bg-green-100 text-green-800"
-                        : chat.status === "waiting"
-                          ? "bg-yellow-100 text-yellow-800"
-                          : "bg-gray-100 text-gray-800"
-                    }`}
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Filter chats" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Chats</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="waiting">Waiting</SelectItem>
+                  <SelectItem value="closed">Closed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="overflow-y-auto flex-1">
+              {filteredChats.length > 0 ? (
+                filteredChats.map((chat) => (
+                  <div
+                    key={chat.id}
+                    className={`p-4 border-b border-gray-200 cursor-pointer hover:bg-gray-50 ${activeChat?.id === chat.id ? "bg-blue-50" : ""}`}
+                    onClick={() => handleSelectChat(chat)}
                   >
-                    {chat.status.charAt(0).toUpperCase() + chat.status.slice(1)}
-                  </Badge>
-                  {chat.unreadCount > 0 && (
-                    <Badge className="bg-primary">{chat.unreadCount}</Badge>
-                  )}
+                    <div className="flex justify-between items-start mb-1">
+                      <div className="font-medium">
+                        {chat.ticket?.client?.user?.fullName ||
+                          "Unknown Client"}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {new Date(chat.lastActivity).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </div>
+                    </div>
+                    <div className="text-sm text-gray-600 truncate mb-1">
+                      {chat.subject}
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <Badge
+                        variant="outline"
+                        className={`${
+                          chat.status === "active"
+                            ? "bg-green-100 text-green-800"
+                            : chat.status === "waiting"
+                              ? "bg-yellow-100 text-yellow-800"
+                              : "bg-gray-100 text-gray-800"
+                        }`}
+                      >
+                        {chat.status.charAt(0).toUpperCase() +
+                          chat.status.slice(1)}
+                      </Badge>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="p-4 text-center text-gray-500">
+                  No chats found
                 </div>
-              </div>
-            ))
-          ) : (
-            <div className="p-4 text-center text-gray-500">No chats found</div>
-          )}
-        </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {activeTab === "users" && (
+          <div className="overflow-y-auto flex-1 p-4">
+            <Button
+              onClick={() => {
+                // Show full user management in main area
+                setActiveChat(null);
+              }}
+              className="w-full"
+            >
+              Manage Users & Companies
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Main chat area */}
       <div className="flex-1 flex flex-col">
-        {activeChat ? (
+        {activeTab === "users" ? (
+          <UserManagement />
+        ) : activeChat ? (
           <>
             <div className="p-4 bg-white border-b border-gray-200 flex justify-between items-center">
               <div>
-                <h2 className="font-semibold">{activeChat.clientName}</h2>
+                <h2 className="font-semibold">
+                  {activeChat.ticket?.client?.user?.fullName ||
+                    "Unknown Client"}
+                </h2>
                 <p className="text-sm text-gray-500">{activeChat.subject}</p>
               </div>
               <Select value={selectedClient} onValueChange={handleClientSwitch}>
@@ -369,7 +337,8 @@ const TechnicianDashboard: React.FC<TechnicianDashboardProps> = ({
                 <SelectContent>
                   {clients.map((client) => (
                     <SelectItem key={client.id} value={client.id}>
-                      {client.name} ({client.company})
+                      {client.user?.fullName || "Unknown"} (
+                      {client.company?.name || "Unknown Company"})
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -377,43 +346,38 @@ const TechnicianDashboard: React.FC<TechnicianDashboardProps> = ({
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
-              {activeChat.messages.length > 0 ? (
-                activeChat.messages.map((message) => (
+              {messages.length > 0 ? (
+                messages.map((message) => (
                   <div
                     key={message.id}
-                    className={`mb-4 flex ${message.sender === "technician" ? "justify-end" : "justify-start"}`}
+                    className={`mb-4 flex ${message.senderId === user?.id ? "justify-end" : "justify-start"}`}
                   >
-                    {message.sender === "client" && (
+                    {message.senderId !== user?.id && (
                       <Avatar className="h-8 w-8 mr-2">
-                        <AvatarImage
-                          src={
-                            clients.find((c) => c.id === activeChat.clientId)
-                              ?.avatar
-                          }
-                        />
+                        <AvatarImage src={message.sender?.avatarUrl} />
                         <AvatarFallback>
-                          {activeChat.clientName.charAt(0)}
+                          {message.sender?.fullName?.charAt(0) || "U"}
                         </AvatarFallback>
                       </Avatar>
                     )}
                     <div
-                      className={`max-w-[70%] p-3 rounded-lg ${message.sender === "technician" ? "bg-primary text-white" : "bg-white border border-gray-200"}`}
+                      className={`max-w-[70%] p-3 rounded-lg ${message.senderId === user?.id ? "bg-primary text-white" : "bg-white border border-gray-200"}`}
                     >
                       <div className="text-sm">{message.message}</div>
                       <div className="text-xs mt-1 text-right text-gray-500">
-                        {new Date(message.timestamp).toLocaleTimeString([], {
+                        {new Date(message.createdAt).toLocaleTimeString([], {
                           hour: "2-digit",
                           minute: "2-digit",
                         })}
                       </div>
                     </div>
-                    {message.sender === "technician" && (
+                    {message.senderId === user?.id && (
                       <Avatar className="h-8 w-8 ml-2">
                         <AvatarFallback className="bg-primary/10 text-primary">
-                          {currentTechnician
-                            .split(" ")
+                          {profile?.fullName
+                            ?.split(" ")
                             .map((n) => n[0])
-                            .join("")}
+                            .join("") || "T"}
                         </AvatarFallback>
                       </Avatar>
                     )}
@@ -469,7 +433,8 @@ const TechnicianDashboard: React.FC<TechnicianDashboardProps> = ({
                   <SelectContent>
                     {clients.map((client) => (
                       <SelectItem key={client.id} value={client.id}>
-                        {client.name} ({client.company})
+                        {client.user?.fullName || "Unknown"} (
+                        {client.company?.name || "Unknown Company"})
                       </SelectItem>
                     ))}
                   </SelectContent>

@@ -1,14 +1,26 @@
-import React from "react";
-import { Bell, HelpCircle, User, MessageSquare } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { HelpCircle, LogOut } from "lucide-react";
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "./ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
+import { signOut } from "../lib/auth";
+import { useAuth } from "../contexts/AuthContext";
+import NotificationsPopover from "./NotificationsPopover";
+import ChatPopover from "./ChatPopover";
+import { getUnreadMessagesCount } from "../lib/chat";
+import { getUnreadNotificationsCount } from "../lib/notifications";
 
 interface HeaderProps {
   companyName?: string;
@@ -21,6 +33,48 @@ const Header = ({
   userAvatar = "",
   userName = "John Doe",
 }: HeaderProps) => {
+  const navigate = useNavigate();
+  const { user, profile } = useAuth();
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [unreadMessages, setUnreadMessages] = useState(0);
+
+  useEffect(() => {
+    const fetchUnreadCounts = async () => {
+      if (!user) return;
+
+      try {
+        const notificationsCount = await getUnreadNotificationsCount(user.id);
+        const messagesCount = await getUnreadMessagesCount(user.id);
+
+        setUnreadNotifications(notificationsCount);
+        setUnreadMessages(messagesCount);
+      } catch (error) {
+        console.error("Error fetching unread counts:", error);
+      }
+    };
+
+    fetchUnreadCounts();
+
+    // Set up an interval to check for new notifications/messages
+    const interval = setInterval(fetchUnreadCounts, 30000); // every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [user]);
+
+  const handleSignOut = async () => {
+    try {
+      const success = await signOut();
+      if (success) {
+        navigate("/login", { replace: true });
+      }
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
+  };
+
+  // Use profile name if available, otherwise fall back to the prop
+  const displayName = profile?.full_name || userName;
+
   return (
     <header className="w-full h-20 px-6 bg-white border-b border-gray-200 flex items-center justify-between shadow-sm">
       <div className="flex items-center">
@@ -28,35 +82,15 @@ const Header = ({
       </div>
 
       <div className="flex items-center space-x-4">
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative">
-                <Bell className="h-5 w-5" />
-                <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Notifications</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <NotificationsPopover
+          unreadCount={unreadNotifications}
+          onCountChange={setUnreadNotifications}
+        />
 
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Link to="/technician">
-                <Button variant="ghost" size="icon" className="relative">
-                  <MessageSquare className="h-5 w-5" />
-                  <span className="absolute top-0 right-0 h-2 w-2 bg-green-500 rounded-full"></span>
-                </Button>
-              </Link>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Technician Chat</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <ChatPopover
+          unreadCount={unreadMessages}
+          onCountChange={setUnreadMessages}
+        />
 
         <TooltipProvider>
           <Tooltip>
@@ -71,20 +105,33 @@ const Header = ({
           </Tooltip>
         </TooltipProvider>
 
-        <div className="flex items-center space-x-2">
-          <Avatar>
-            <AvatarImage src={userAvatar} alt={userName} />
-            <AvatarFallback className="bg-primary/10 text-primary">
-              {userName
-                .split(" ")
-                .map((name) => name[0])
-                .join("")}
-            </AvatarFallback>
-          </Avatar>
-          <span className="text-sm font-medium hidden md:inline-block">
-            {userName}
-          </span>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <div className="flex items-center space-x-2 cursor-pointer">
+              <Avatar>
+                <AvatarImage src={userAvatar} alt={displayName} />
+                <AvatarFallback className="bg-primary/10 text-primary">
+                  {displayName
+                    .split(" ")
+                    .map((name) => name[0])
+                    .join("")}
+                </AvatarFallback>
+              </Avatar>
+              <span className="text-sm font-medium hidden md:inline-block">
+                {displayName}
+              </span>
+            </div>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onClick={handleSignOut}
+              className="cursor-pointer"
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              Sign Out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );
