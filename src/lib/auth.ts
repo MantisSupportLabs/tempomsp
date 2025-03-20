@@ -61,8 +61,6 @@ export async function signOut() {
   if (error) {
     throw error;
   }
-  // Clear any local storage items that might be causing login issues
-  localStorage.removeItem("supabase.auth.token");
   return true;
 }
 

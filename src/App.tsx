@@ -20,7 +20,24 @@ function App() {
   const location = useLocation();
   const navigationType = useNavigationType();
 
-  // We're removing the code that prevents back button functionality
+  // Handle browser back button
+  useEffect(() => {
+    if (navigationType === "POP") {
+      // Prevent default back behavior and handle it manually
+      window.history.pushState(null, "", location.pathname);
+    }
+  }, [location, navigationType]);
+
+  // Add event listener for popstate (back/forward buttons)
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      // Prevent default back behavior
+      window.history.pushState(null, "", location.pathname);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [location.pathname]);
   return (
     <AuthProvider>
       <Suspense

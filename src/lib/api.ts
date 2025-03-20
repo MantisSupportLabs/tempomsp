@@ -409,8 +409,8 @@ export async function getMessages(chatId: string) {
   return data.map((message) => ({
     id: message.id,
     chatId: message.chat_id,
-    senderId: message.user_id, // Changed from sender_id to user_id
-    message: message.content, // Changed from message to content
+    senderId: message.user_id,
+    message: message.content,
     read: message.read,
     createdAt: message.created_at,
     sender:
@@ -433,8 +433,8 @@ export async function sendMessage(
     .from("messages")
     .insert({
       chat_id: chatId,
-      user_id: senderId, // Changed from sender_id to user_id
-      content: message, // Changed from message to content
+      user_id: senderId,
+      content: message,
     })
     .select()
     .single();
@@ -464,7 +464,7 @@ export async function markMessagesAsRead(chatId: string, userId: string) {
     .from("messages")
     .update({ read: true })
     .eq("chat_id", chatId)
-    .neq("user_id", userId) // Changed from sender_id to user_id
+    .neq("user_id", userId)
     .eq("read", false);
 
   if (error) {

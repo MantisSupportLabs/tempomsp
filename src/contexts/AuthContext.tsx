@@ -23,7 +23,7 @@ export function useAuth() {
   return useContext(AuthContext);
 }
 
-function AuthProviderComponent({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -61,10 +61,6 @@ function AuthProviderComponent({ children }: { children: React.ReactNode }) {
             await loadUserProfile(currentUser.id);
           } catch (profileErr) {
             console.warn("Could not load profile, but continuing:", profileErr);
-            // If we can't load the profile, sign out to prevent login issues
-            await supabase.auth.signOut();
-            setUser(null);
-            setProfile(null);
           }
         }
       } catch (err) {
@@ -72,10 +68,6 @@ function AuthProviderComponent({ children }: { children: React.ReactNode }) {
         setError(
           err instanceof Error ? err : new Error("Failed to initialize auth"),
         );
-        // On error, clear auth state
-        await supabase.auth.signOut();
-        setUser(null);
-        setProfile(null);
       } finally {
         setLoading(false);
       }
@@ -109,5 +101,3 @@ function AuthProviderComponent({ children }: { children: React.ReactNode }) {
     </AuthContext.Provider>
   );
 }
-
-export const AuthProvider = AuthProviderComponent;
